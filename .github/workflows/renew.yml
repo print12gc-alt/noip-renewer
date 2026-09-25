@@ -1,0 +1,41 @@
+name: Renew No-IP hostnames
+
+# Confirms No-IP free hostnames before the 30-day expiry window closes.
+# No-IP deletes unconfirmed hostnames, which would break the VPS firewall
+# script's ability to resolve the home address.
+#
+# Credentials live in repository secrets (Settings > Secrets and variables >
+# Actions): NO_IP_USERNAME, NO_IP_PASSWORD, and NO_IP_TOTP_KEY if 2FA is on.
+#
+# NOTE: scheduled workflows are disabled by default on forks. Enable this once
+# from the Actions tab, or the cron entry below will never fire.
+
+on:
+  schedule:
+    # daily, deliberately off the hour to avoid the top-of-minute scheduler rush
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build renewer from source
+        run: docker build -t noip-renewer -f Dockerfile.dev .
+
+      - name: Renew hostnames
+        env:
+          NO_IP_USERNAME: ${{ secrets.NO_IP_USERNAME }}
+          NO_IP_PASSWORD: ${{ secrets.NO_IP_PASSWORD }}
+          NO_IP_TOTP_KEY: ${{ secrets.NO_IP_TOTP_KEY }}
+        run: |
+          docker run --rm \
+            -e NO_IP_USERNAME \
+            -e NO_IP_PASSWORD \
+            -e NO_IP_TOTP_KEY \
+            -e TRANSLATE_ENABLED=false \
+            noip-renewer
